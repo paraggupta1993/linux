@@ -869,6 +869,104 @@ int do_huge_pmd_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 					    flags);
 }
 
+int do_huge_pmd_exec_page(struct mm_struct *mm, struct vm_area_struct *vma,
+			       unsigned long address, pmd_t *pmd,
+			       unsigned int flags)
+{
+	int ret = 0;
+
+	// TODO: figure out if anon flags should differ 
+	unsigned int anon_flags = flags;	
+	unsigned long addr_cursor;
+	unsigned long haddr;	
+	void *anon_page_addr_off;
+	void *src_page_addr; 
+	void *err = NULL;
+	struct vm_fault vmf;
+	struct page *anon_page;
+
+	pgoff_t pgoff;
+	spinlock_t *ptl; 
+	
+	if (!vma->vm_ops->fault)
+		return VM_FAULT_SIGBUS;
+
+	// we need to mark this anon page as readable only
+	ret = do_huge_pmd_anonymous_page(mm, vma, address, pmd, anon_flags);
+	
+	if (ret)
+		return ret;
+	
+	anon_page = pmd_page(pmd);
+	anon_page_addr_off = kmap(anon_page);
+	hddr = address & HPAGE_PMD_MASK;
+	addr_cursor = hddr;
+
+copy_page_cache:
+ 	pgoff = (((addr_cursor & PAGE_MASK)
+                 - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
+
+	/*The mmap_sem must have been held on entry, and may have been
+	 * released depending on flags and vma->vm_ops->fault() return value.
+	 * See filemap_fault() and __lock_page_retry().*/
+
+	vmf.virtual_address = (void __user *)(addr_cursor & PAGE_MASK);
+	vmf.pgoff = pgoff;
+	vmf.flags = flags;
+	vmf.page = NULL;
+	vmf.cow_page = NULL;
+
+	ret = vma->vm_ops->fault(vma, &vmf);
+
+	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
+		goto fallback;
+
+	if (!vmf.page)
+		goto fallback;
+
+	if (unlikely(PageHWPoison(vmf.page))) {
+		if (ret & VM_FAULT_LOCKED)
+			unlock_page(vmf.page);
+		page_cache_release(vmf.page);
+		goto fallback;
+	}
+	
+	// we need to lock the page for memcpy 
+	if (!PageLocked(vmf.page))
+		lock_page(vmf.page);
+	
+	src_page_addr = kmap(vmf.page);
+	err = memcpy(anon_page_addr_off, src_page_addr, PAGE_CACHE_SIZE);
+	if (IS_ERR(err)) {
+		unlock_page(vmf.page);
+		goto fallback;
+	}
+
+	unlock_page(vmf.page);
+
+	address_cursor += PAGE_CACHE_SIZE;
+	anon_page_addr_off += PAGE_CACHE_SIZE; 
+
+	/* Check for more pages */
+	if (address_cursor < haddr + HPAGE_PMD_SIZE)
+		goto copy_page_cache;
+
+	/* taken from do_set_pte */
+	// inc_mm_counter_fast(vma->vm_mm, MM_FILEPAGES);
+	// page_add_file_rmap(page);
+	
+	update_mmu_cache_pmd(vma, address, pmd);
+	return ret;
+
+fallback:
+	put_page(anon_page);
+	ptl = pmd_lock(mm, pmd);
+	put_pmd(pmd);
+	spin_unlock(ptl);
+	return VM_FAULT_FALLBACK;
+}
+
+
 static void insert_pfn_pmd(struct vm_area_struct *vma, unsigned long addr,
 		pmd_t *pmd, unsigned long pfn, pgprot_t prot, bool write)
 {

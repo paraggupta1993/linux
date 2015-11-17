@@ -3239,6 +3239,9 @@ static int create_huge_pmd(struct mm_struct *mm, struct vm_area_struct *vma,
 		return do_huge_pmd_anonymous_page(mm, vma, address, pmd, flags);
 	if (vma->vm_ops->pmd_fault)
 		return vma->vm_ops->pmd_fault(vma, address, pmd, flags);
+	if (vma_is_executable(vma))
+		if (!(flags & FAULT_FLAG_WRITE))
+			return do_huge_pmd_exec_page(mm, vma, address, pmd, flags);
 	return VM_FAULT_FALLBACK;
 }
 

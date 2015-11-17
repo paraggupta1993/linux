@@ -1315,6 +1315,12 @@ static inline bool vma_is_anonymous(struct vm_area_struct *vma)
 	return !vma->vm_ops;
 }
 
+static inline bool vma_is_executable(struct vm_area_struct *vma)
+{
+	return ((vma->vm_flags & (VM_EXEC|VM_WRITE)) == VM_EXEC)
+}
+
+
 static inline int stack_guard_page_start(struct vm_area_struct *vma,
 					     unsigned long addr)
 {
