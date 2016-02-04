@@ -5,6 +5,10 @@ extern int do_huge_pmd_anonymous_page(struct mm_struct *mm,
 				      struct vm_area_struct *vma,
 				      unsigned long address, pmd_t *pmd,
 				      unsigned int flags);
+extern int do_huge_pmd_exec_page(struct mm_struct *mm,
+				 struct vm_area_struct *vma,
+				 unsigned long address, pmd_t *pmd,
+				 unsigned int flags);
 extern int copy_huge_pmd(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 			 pmd_t *dst_pmd, pmd_t *src_pmd, unsigned long addr,
 			 struct vm_area_struct *vma);

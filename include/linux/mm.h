@@ -1317,7 +1317,7 @@ static inline bool vma_is_anonymous(struct vm_area_struct *vma)
 
 static inline bool vma_is_executable(struct vm_area_struct *vma)
 {
-	return ((vma->vm_flags & (VM_EXEC|VM_WRITE)) == VM_EXEC)
+	return ((vma->vm_flags & (VM_EXEC|VM_WRITE)) == VM_EXEC);
 }
 
 
