@@ -3237,11 +3237,15 @@ static int create_huge_pmd(struct mm_struct *mm, struct vm_area_struct *vma,
 {
 	if (vma_is_anonymous(vma))
 		return do_huge_pmd_anonymous_page(mm, vma, address, pmd, flags);
-	if (vma->vm_ops->pmd_fault)
+	if (vma->vm_ops->pmd_fault) {
 		return vma->vm_ops->pmd_fault(vma, address, pmd, flags);
-	if (vma_is_executable(vma))
-		if (!(flags & FAULT_FLAG_WRITE))
+	}
+
+	if (vma_is_executable(vma) && !(flags & FAULT_FLAG_WRITE)) {
 			return do_huge_pmd_exec_page(mm, vma, address, pmd, flags);
+		//else 
+		//	printk("HUGE_EXEC Not enable\n");
+	}
 	return VM_FAULT_FALLBACK;
 }
 

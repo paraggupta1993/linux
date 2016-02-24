@@ -26,7 +26,7 @@
 #include <linux/hashtable.h>
 #include <linux/userfaultfd_k.h>
 #include <linux/page_idle.h>
-
+#include <linux/sysctl.h> 
 #include <asm/tlb.h>
 #include <asm/pgalloc.h>
 #include "internal.h"
@@ -49,6 +49,7 @@ unsigned long transparent_hugepage_flags __read_mostly =
 	(1<<TRANSPARENT_HUGEPAGE_DEFRAG_FLAG)|
 	(1<<TRANSPARENT_HUGEPAGE_DEFRAG_KHUGEPAGED_FLAG)|
 	(1<<TRANSPARENT_HUGEPAGE_USE_ZERO_PAGE_FLAG);
+//(1<<TRANSPARENT_HUGEPAGE_USE_HUGE_EXEC_PAGE_FLAG);
 
 /* default scan 8*512 pte (or vmas) every 30 second */
 static unsigned int khugepaged_pages_to_scan __read_mostly = HPAGE_PMD_NR*8;
@@ -374,6 +375,22 @@ static ssize_t use_zero_page_store(struct kobject *kobj,
 }
 static struct kobj_attribute use_zero_page_attr =
 	__ATTR(use_zero_page, 0644, use_zero_page_show, use_zero_page_store);
+
+static ssize_t use_huge_exec_page_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	return single_flag_show(kobj, attr, buf,
+				TRANSPARENT_HUGEPAGE_USE_HUGE_EXEC_PAGE_FLAG);
+}
+static ssize_t use_huge_exec_page_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	return single_flag_store(kobj, attr, buf, count,
+				 TRANSPARENT_HUGEPAGE_USE_HUGE_EXEC_PAGE_FLAG);
+}
+static struct kobj_attribute use_huge_exec_page_attr =
+	__ATTR(use_huge_exec_page, 0644, use_huge_exec_page_show, use_huge_exec_page_store);
+
 #ifdef CONFIG_DEBUG_VM
 static ssize_t debug_cow_show(struct kobject *kobj,
 				struct kobj_attribute *attr, char *buf)
@@ -396,6 +413,7 @@ static struct attribute *hugepage_attr[] = {
 	&enabled_attr.attr,
 	&defrag_attr.attr,
 	&use_zero_page_attr.attr,
+	&use_huge_exec_page_attr.attr,
 #ifdef CONFIG_DEBUG_VM
 	&debug_cow_attr.attr,
 #endif
@@ -873,6 +891,7 @@ int do_huge_pmd_exec_page(struct mm_struct *mm, struct vm_area_struct *vma,
 			       unsigned long address, pmd_t *pmd,
 			       unsigned int flags)
 {
+
 	int ret = 0;
 	int pn = 0;	
 	// TODO: figure out if anon flags should differ 
@@ -887,6 +906,9 @@ int do_huge_pmd_exec_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	pgoff_t pgoff;
 	spinlock_t *ptl;
 
+	if (!transparent_hugepage_use_huge_exec_page())
+        	return VM_FAULT_FALLBACK;
+	
 	if (!vma->vm_ops->fault)
 		return VM_FAULT_SIGBUS;
 
@@ -979,12 +1001,15 @@ fallback:
 	printk_ratelimited(KERN_WARNING "Pmd_exec Step Fallback");
 	
 	//ptl = pmd_lock(mm, pmd);
+	/*
 	put_page(anon_page);
 	pmd_free(mm, pmd);
 	//spin_unlock(ptl);
+	*/
 	printk_ratelimited(KERN_WARNING "Pmd_exec Step Fallback Return");
 	return VM_FAULT_FALLBACK;
 }
+
 
 static void insert_pfn_pmd(struct vm_area_struct *vma, unsigned long addr,
 		pmd_t *pmd, unsigned long pfn, pgprot_t prot, bool write)
