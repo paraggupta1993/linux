@@ -272,6 +272,9 @@ static inline int gfpflags_to_migratetype(const gfp_t gfp_flags)
 
 	if (unlikely(page_group_by_mobility_disabled))
 		return MIGRATE_UNMOVABLE;
+	
+	if ((gfp_flags & GFP_TRANSHUGE_LIGHT) == GFP_TRANSHUGE_LIGHT)
+		return MIGRATE_HUGEPAGE;
 
 	/* Group based on mobility */
 	return (gfp_flags & GFP_MOVABLE_MASK) >> GFP_MOVABLE_SHIFT;

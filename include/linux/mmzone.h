@@ -60,6 +60,7 @@ enum {
 #ifdef CONFIG_MEMORY_ISOLATION
 	MIGRATE_ISOLATE,	/* can't allocate from here */
 #endif
+	MIGRATE_HUGEPAGE,
 	MIGRATE_TYPES
 };
 
@@ -332,6 +333,9 @@ enum zone_type {
 	 * access.
 	 */
 	ZONE_HIGHMEM,
+#endif
+#ifdef  CONFIG_ZONE_HUGEPAGE
+	ZONE_HUGEPAGE,
 #endif
 	ZONE_MOVABLE,
 #ifdef CONFIG_ZONE_DEVICE
