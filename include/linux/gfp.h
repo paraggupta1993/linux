@@ -41,6 +41,7 @@ struct vm_area_struct;
 #define ___GFP_OTHER_NODE	0x800000u
 #define ___GFP_WRITE		0x1000000u
 #define ___GFP_KSWAPD_RECLAIM	0x2000000u
+#define ___GFP_PAGECACHE       0x4000000u
 /* If the above are modified, __GFP_BITS_SHIFT may need updating */
 
 /*
@@ -85,7 +86,8 @@ struct vm_area_struct;
 #define __GFP_HARDWALL   ((__force gfp_t)___GFP_HARDWALL)
 #define __GFP_THISNODE	((__force gfp_t)___GFP_THISNODE)
 #define __GFP_ACCOUNT	((__force gfp_t)___GFP_ACCOUNT)
-
+#define __GFP_PAGECACHE ((__force gfp_t)___GFP_PAGECACHE)
+#define GFP_PAGECACHE (__GFP_PAGECACHE)
 /*
  * Watermark modifiers -- controls access to emergency reserves
  *
@@ -187,7 +189,7 @@ struct vm_area_struct;
 #define __GFP_OTHER_NODE ((__force gfp_t)___GFP_OTHER_NODE)
 
 /* Room for N __GFP_FOO bits */
-#define __GFP_BITS_SHIFT 26
+#define __GFP_BITS_SHIFT 27
 #define __GFP_BITS_MASK ((__force gfp_t)((1 << __GFP_BITS_SHIFT) - 1))
 
 /*
@@ -264,6 +266,7 @@ struct vm_area_struct;
 #define GFP_MOVABLE_MASK (__GFP_RECLAIMABLE|__GFP_MOVABLE)
 #define GFP_MOVABLE_SHIFT 3
 
+extern gfp_t gfp_allowed_mask;
 static inline int gfpflags_to_migratetype(const gfp_t gfp_flags)
 {
 	VM_WARN_ON((gfp_flags & GFP_MOVABLE_MASK) == GFP_MOVABLE_MASK);
@@ -275,6 +278,17 @@ static inline int gfpflags_to_migratetype(const gfp_t gfp_flags)
 	
 	if ((gfp_flags & GFP_TRANSHUGE_LIGHT) == GFP_TRANSHUGE_LIGHT)
 		return MIGRATE_HUGEPAGE;
+	
+	if (gfp_allowed_mask != __GFP_BITS_MASK) {
+		printk("GFP_BOOT_MASK is set\n");
+	} 
+	else
+	{
+		if ((gfp_flags & GFP_PAGECACHE) == GFP_PAGECACHE) {
+			printk("GFP_BITS_MASK IS SET AND PAGECACHE IS DEMANDED\n");
+			return MIGRATE_PAGECACHE;
+		}
+	}
 
 	/* Group based on mobility */
 	return (gfp_flags & GFP_MOVABLE_MASK) >> GFP_MOVABLE_SHIFT;

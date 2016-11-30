@@ -69,7 +69,7 @@
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
 #include "internal.h"
-
+#include <linux/gfp.h>
 /* prevent >1 _updater_ of zone percpu pageset ->high and ->batch fields */
 static DEFINE_MUTEX(pcp_batch_high_lock);
 #define MIN_PERCPU_PAGELIST_FRACTION	(8)
@@ -244,6 +244,7 @@ char * const migratetype_names[MIGRATE_TYPES] = {
 	"Isolate",
 #endif
 	"HugePage",
+	"PageCache",
 };
 
 compound_page_dtor * const compound_page_dtors[] = {
@@ -1820,17 +1821,18 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
  * This array describes the order lists are fallen back to when
  * the free lists for the desirable migrate type are depleted
  */
-static int fallbacks[MIGRATE_TYPES][4] = {
-	[MIGRATE_UNMOVABLE]   = { MIGRATE_RECLAIMABLE, MIGRATE_MOVABLE,   MIGRATE_HUGEPAGE, MIGRATE_TYPES },
-	[MIGRATE_RECLAIMABLE] = { MIGRATE_UNMOVABLE,   MIGRATE_MOVABLE,   MIGRATE_HUGEPAGE, MIGRATE_TYPES },
-	[MIGRATE_MOVABLE]     = { MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_HUGEPAGE, MIGRATE_TYPES },
+static int fallbacks[MIGRATE_TYPES][5] = {
+	[MIGRATE_UNMOVABLE]   = { MIGRATE_RECLAIMABLE, MIGRATE_MOVABLE, MIGRATE_PAGECACHE, MIGRATE_HUGEPAGE, MIGRATE_TYPES },
+	[MIGRATE_RECLAIMABLE] = { MIGRATE_UNMOVABLE,  MIGRATE_MOVABLE, MIGRATE_PAGECACHE, MIGRATE_HUGEPAGE, MIGRATE_TYPES },
+	[MIGRATE_MOVABLE]     = { MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_PAGECACHE, MIGRATE_HUGEPAGE, MIGRATE_TYPES },
 #ifdef CONFIG_CMA
 	[MIGRATE_CMA]         = { MIGRATE_TYPES }, /* Never used */
 #endif
 #ifdef CONFIG_MEMORY_ISOLATION
 	[MIGRATE_ISOLATE]     = { MIGRATE_TYPES }, /* Never used */
 #endif
-	[MIGRATE_HUGEPAGE]    = { MIGRATE_MOVABLE, MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_TYPES },
+	[MIGRATE_HUGEPAGE]    = { MIGRATE_PAGECACHE, MIGRATE_MOVABLE, MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_TYPES },
+	[MIGRATE_PAGECACHE]   = { MIGRATE_MOVABLE, MIGRATE_HUGEPAGE, MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_TYPES },
 };
 
 #ifdef CONFIG_CMA
@@ -2876,13 +2878,23 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 	struct zoneref *z = ac->preferred_zoneref;
 	struct zone *zone;
 	struct pglist_data *last_pgdat_dirty_limit = NULL;
+	
+	if ((gfp_mask & GFP_PAGECACHE) == GFP_PAGECACHE) {
+		printk("Page Cache migrate type needed\n");
+		printk("Page Order: %d\n", order);
+		printk("Zone: %p\n", z->zone);
+	}	
 
 	/*
 	 * Scan zonelist, looking for a zone with enough free.
 	 * See also __cpuset_node_allowed() comment in kernel/cpuset.c.
 	 */
-	for_next_zone_zonelist_nodemask(zone, z, ac->zonelist, ac->high_zoneidx,
-								ac->nodemask) {
+	for (zone = z->zone;    \
+                 zone;                                                   \
+                 z = next_zones_zonelist(++z, ac->high_zoneidx, ac->nodemask),        \
+                 zone = zonelist_zone(z))  {
+	/*for_next_zone_zonelist_nodemask(zone, z, ac->zonelist, ac->high_zoneidx,
+								ac->nodemask) */
 		struct page *page;
 		unsigned long mark;
 
@@ -2952,8 +2964,15 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 		}
 
 try_this_zone:
+		if ((gfp_mask & GFP_PAGECACHE) == GFP_PAGECACHE) {
+			printk("Page Cache migrate type needed\n");
+			printk("Page Order: %d\n", order);
+			printk("Zone: %p\n", zone);
+		}	
+		
 		page = buffered_rmqueue(ac->preferred_zoneref->zone, zone, order,
 				gfp_mask, alloc_flags, ac->migratetype);
+		
 		if (page) {
 			prep_new_page(page, order, gfp_mask, alloc_flags);
 
@@ -3719,6 +3738,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 		.nodemask = nodemask,
 		.migratetype = gfpflags_to_migratetype(gfp_mask),
 	};
+	
 
 	if (cpusets_enabled()) {
 		alloc_mask |= __GFP_HARDWALL;
@@ -3765,6 +3785,9 @@ retry_cpuset:
 		goto no_zone;
 	}
 
+	if (order == 582) 
+		printk("ORDER IS 582\n");
+	
 	/* First allocation attempt */
 	page = get_page_from_freelist(alloc_mask, order, alloc_flags, &ac);
 	if (likely(page))

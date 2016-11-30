@@ -61,6 +61,7 @@ enum {
 	MIGRATE_ISOLATE,	/* can't allocate from here */
 #endif
 	MIGRATE_HUGEPAGE,
+	MIGRATE_PAGECACHE,
 	MIGRATE_TYPES
 };
 
