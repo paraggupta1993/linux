@@ -1826,7 +1826,7 @@ static int fallbacks[MIGRATE_TYPES][6] = {
 	[MIGRATE_UNMOVABLE]   = { MIGRATE_RECLAIMABLE, MIGRATE_MOVABLE, MIGRATE_PAGECACHE, MIGRATE_HUGEPAGE, MIGRATE_TYPES },
 	[MIGRATE_RECLAIMABLE] = { MIGRATE_UNMOVABLE,  MIGRATE_MOVABLE, MIGRATE_PAGECACHE, MIGRATE_HUGEPAGE, MIGRATE_TYPES },
 	[MIGRATE_MOVABLE]     = { MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_PAGECACHE, MIGRATE_HUGEPAGE, MIGRATE_TYPES },
-	[MIGRATE_HUGEPAGE]    = { MIGRATE_PAGECACHE, MIGRATE_MOVABLE, MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_TYPES },
+	[MIGRATE_HUGEPAGE]    = { MIGRATE_MOVABLE, MIGRATE_PAGECACHE, MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_TYPES },
 	[MIGRATE_PAGECACHE]   = { MIGRATE_MOVABLE, MIGRATE_HUGEPAGE, MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_TYPES },
 #ifdef CONFIG_CMA
 	[MIGRATE_CMA]         = { MIGRATE_TYPES }, /* Never used */
@@ -2120,7 +2120,7 @@ static void unreserve_highatomic_pageblock(const struct alloc_context *ac)
 }
 
 /* Remove an element from the buddy allocator from the fallback list */
-static inline struct page *
+	static inline struct page *
 __rmqueue_fallback(struct zone *zone, unsigned int order, int start_migratetype)
 {
 	struct free_area *area;
@@ -2129,49 +2129,89 @@ __rmqueue_fallback(struct zone *zone, unsigned int order, int start_migratetype)
 	int fallback_mt;
 	bool can_steal;
 
-	/* Find the largest possible block of pages in the other list */
-	for (current_order = MAX_ORDER-1;
+	if (start_migratetype == MIGRATE_PAGECACHE) { 
+		for (current_order = order;
+				current_order >= order && current_order <= MAX_ORDER-1;
+				++current_order) {
+			area = &(zone->free_area[current_order]);
+			fallback_mt = find_suitable_fallback(area, current_order,
+					start_migratetype, false, &can_steal);
+			if (fallback_mt == -1)
+				continue;
+
+			page = list_first_entry(&area->free_list[fallback_mt],
+					struct page, lru);
+			if (can_steal)
+				steal_suitable_fallback(zone, page, start_migratetype);
+
+			/* Remove the page from the freelists */
+			area->nr_free--;
+			list_del(&page->lru);
+			rmv_page_order(page);
+
+			expand(zone, page, order, current_order, area,
+					start_migratetype);
+			/*
+			 * The pcppage_migratetype may differ from pageblock's
+			 * migratetype depending on the decisions in
+			 * find_suitable_fallback(). This is OK as long as it does not
+			 * differ for MIGRATE_CMA pageblocks. Those can be used as
+			 * fallback only via special __rmqueue_cma_fallback() function
+			 */
+			set_pcppage_migratetype(page, start_migratetype);
+
+			trace_mm_page_alloc_extfrag(page, order, current_order,
+					start_migratetype, fallback_mt);
+			printk("Stole Smallest order page from fallback\n");
+			return page;
+		}
+
+	}
+	else 
+	{
+		/* Find the largest possible block of pages in the other list */
+		for (current_order = MAX_ORDER-1;
 				current_order >= order && current_order <= MAX_ORDER-1;
 				--current_order) {
-		area = &(zone->free_area[current_order]);
-		fallback_mt = find_suitable_fallback(area, current_order,
-				start_migratetype, false, &can_steal);
-		if (fallback_mt == -1)
-			continue;
+			area = &(zone->free_area[current_order]);
+			fallback_mt = find_suitable_fallback(area, current_order,
+					start_migratetype, false, &can_steal);
+			if (fallback_mt == -1)
+				continue;
 
-		page = list_first_entry(&area->free_list[fallback_mt],
-						struct page, lru);
-		if (can_steal)
-			steal_suitable_fallback(zone, page, start_migratetype);
+			page = list_first_entry(&area->free_list[fallback_mt],
+					struct page, lru);
+			if (can_steal)
+				steal_suitable_fallback(zone, page, start_migratetype);
 
-		/* Remove the page from the freelists */
-		area->nr_free--;
-		list_del(&page->lru);
-		rmv_page_order(page);
+			/* Remove the page from the freelists */
+			area->nr_free--;
+			list_del(&page->lru);
+			rmv_page_order(page);
 
-		expand(zone, page, order, current_order, area,
+			expand(zone, page, order, current_order, area,
 					start_migratetype);
-		/*
-		 * The pcppage_migratetype may differ from pageblock's
-		 * migratetype depending on the decisions in
-		 * find_suitable_fallback(). This is OK as long as it does not
-		 * differ for MIGRATE_CMA pageblocks. Those can be used as
-		 * fallback only via special __rmqueue_cma_fallback() function
-		 */
-		set_pcppage_migratetype(page, start_migratetype);
+			/*
+			 * The pcppage_migratetype may differ from pageblock's
+			 * migratetype depending on the decisions in
+			 * find_suitable_fallback(). This is OK as long as it does not
+			 * differ for MIGRATE_CMA pageblocks. Those can be used as
+			 * fallback only via special __rmqueue_cma_fallback() function
+			 */
+			set_pcppage_migratetype(page, start_migratetype);
 
-		trace_mm_page_alloc_extfrag(page, order, current_order,
-			start_migratetype, fallback_mt);
+			trace_mm_page_alloc_extfrag(page, order, current_order,
+					start_migratetype, fallback_mt);
 
-		return page;
+			return page;
+		}
 	}
-
 	return NULL;
 }
 
-/*
- * Do the hard work of removing an element from the buddy allocator.
- * Call me with the zone->lock already held.
+	/*
+	 * Do the hard work of removing an element from the buddy allocator.
+	 * Call me with the zone->lock already held.
  */
 static struct page *__rmqueue(struct zone *zone, unsigned int order,
 				int migratetype)
