@@ -236,6 +236,8 @@ char * const migratetype_names[MIGRATE_TYPES] = {
 	"Unmovable",
 	"Movable",
 	"Reclaimable",
+	"HugePage",
+	"PageCache",
 	"HighAtomic",
 #ifdef CONFIG_CMA
 	"CMA",
@@ -243,8 +245,6 @@ char * const migratetype_names[MIGRATE_TYPES] = {
 #ifdef CONFIG_MEMORY_ISOLATION
 	"Isolate",
 #endif
-	"HugePage",
-	"PageCache",
 };
 
 compound_page_dtor * const compound_page_dtors[] = {
@@ -257,7 +257,8 @@ compound_page_dtor * const compound_page_dtors[] = {
 	free_transhuge_page,
 #endif
 };
-
+int migratetype_pagecache = 0;
+int migratetype_hugepage = 0;
 int min_free_kbytes = 1024;
 int user_min_free_kbytes = -1;
 int watermark_scale_factor = 10;
@@ -1821,18 +1822,18 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
  * This array describes the order lists are fallen back to when
  * the free lists for the desirable migrate type are depleted
  */
-static int fallbacks[MIGRATE_TYPES][5] = {
+static int fallbacks[MIGRATE_TYPES][6] = {
 	[MIGRATE_UNMOVABLE]   = { MIGRATE_RECLAIMABLE, MIGRATE_MOVABLE, MIGRATE_PAGECACHE, MIGRATE_HUGEPAGE, MIGRATE_TYPES },
 	[MIGRATE_RECLAIMABLE] = { MIGRATE_UNMOVABLE,  MIGRATE_MOVABLE, MIGRATE_PAGECACHE, MIGRATE_HUGEPAGE, MIGRATE_TYPES },
 	[MIGRATE_MOVABLE]     = { MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_PAGECACHE, MIGRATE_HUGEPAGE, MIGRATE_TYPES },
+	[MIGRATE_HUGEPAGE]    = { MIGRATE_PAGECACHE, MIGRATE_MOVABLE, MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_TYPES },
+	[MIGRATE_PAGECACHE]   = { MIGRATE_MOVABLE, MIGRATE_HUGEPAGE, MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_TYPES },
 #ifdef CONFIG_CMA
 	[MIGRATE_CMA]         = { MIGRATE_TYPES }, /* Never used */
 #endif
 #ifdef CONFIG_MEMORY_ISOLATION
 	[MIGRATE_ISOLATE]     = { MIGRATE_TYPES }, /* Never used */
 #endif
-	[MIGRATE_HUGEPAGE]    = { MIGRATE_PAGECACHE, MIGRATE_MOVABLE, MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_TYPES },
-	[MIGRATE_PAGECACHE]   = { MIGRATE_MOVABLE, MIGRATE_HUGEPAGE, MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_TYPES },
 };
 
 #ifdef CONFIG_CMA
@@ -2594,6 +2595,15 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 	unsigned long flags;
 	struct page *page;
 	bool cold = ((gfp_flags & __GFP_COLD) != 0);
+	if (migratetype == MIGRATE_PAGECACHE) {
+		printk("Buffered_rmqueue order: MIGRATETYPE_PAGECACHE \n");
+		
+	}	
+
+	if(order == 582) {
+		printk("Buffered_rmqueue order: %d\n", order);
+
+	}	
 
 	if (likely(order == 0)) {
 		struct per_cpu_pages *pcp;
@@ -2879,11 +2889,11 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 	struct zone *zone;
 	struct pglist_data *last_pgdat_dirty_limit = NULL;
 	
-	if ((gfp_mask & GFP_PAGECACHE) == GFP_PAGECACHE) {
+	/*if ((gfp_mask & GFP_PAGECACHE) == GFP_PAGECACHE) {
 		printk("Page Cache migrate type needed\n");
 		printk("Page Order: %d\n", order);
 		printk("Zone: %p\n", z->zone);
-	}	
+	}*/	
 
 	/*
 	 * Scan zonelist, looking for a zone with enough free.
@@ -2964,11 +2974,11 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 		}
 
 try_this_zone:
-		if ((gfp_mask & GFP_PAGECACHE) == GFP_PAGECACHE) {
+		/*if ((gfp_mask & GFP_PAGECACHE) == GFP_PAGECACHE) {
 			printk("Page Cache migrate type needed\n");
 			printk("Page Order: %d\n", order);
 			printk("Zone: %p\n", zone);
-		}	
+		}*/	
 		
 		page = buffered_rmqueue(ac->preferred_zoneref->zone, zone, order,
 				gfp_mask, alloc_flags, ac->migratetype);
@@ -6759,6 +6769,29 @@ int __meminit init_per_zone_wmark_min(void)
 	return 0;
 }
 core_initcall(init_per_zone_wmark_min)
+
+int sysctl_migratetype_pagecache_sysctl_handler(struct ctl_table *table, int write,
+		void __user *buffer, size_t *length, loff_t *ppos)
+{
+	int rc;
+	rc = proc_dointvec_minmax(table, write, buffer, length, ppos);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+int sysctl_migratetype_hugepage_sysctl_handler(struct ctl_table *table, int write,
+		void __user *buffer, size_t *length, loff_t *ppos)
+{
+	int rc;
+	rc = proc_dointvec_minmax(table, write, buffer, length, ppos);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
 
 /*
  * min_free_kbytes_sysctl_handler - just a wrapper around proc_dointvec() so

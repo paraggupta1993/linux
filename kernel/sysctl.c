@@ -1343,6 +1343,23 @@ static struct ctl_table vm_table[] = {
 		.extra1		= &zero,
 		.extra2		= &one_hundred,
 	},
+	{
+		.procname	= "migratetype_pagecache",
+		.data		= &migratetype_pagecache,
+		.maxlen		= sizeof(migratetype_pagecache),
+		.mode		= 0644,
+		.proc_handler	= sysctl_migratetype_pagecache_sysctl_handler,
+		.extra1		= &zero,
+	},
+	{
+		.procname	= "migratetype_hugepage",
+		.data		= &migratetype_hugepage,
+		.maxlen		= sizeof(migratetype_hugepage),
+		.mode		= 0644,
+		.proc_handler	= sysctl_migratetype_hugepage_sysctl_handler,
+		.extra1		= &zero,
+	},
+
 #ifdef CONFIG_HUGETLB_PAGE
 	{
 		.procname	= "nr_hugepages",

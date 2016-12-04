@@ -34,11 +34,15 @@
  * will not.
  */
 #define PAGE_ALLOC_COSTLY_ORDER 3
+extern int migratetype_pagecache; 
+extern int migratetype_hugepage; 
 
 enum {
 	MIGRATE_UNMOVABLE,
 	MIGRATE_MOVABLE,
 	MIGRATE_RECLAIMABLE,
+	MIGRATE_HUGEPAGE,
+	MIGRATE_PAGECACHE,
 	MIGRATE_PCPTYPES,	/* the number of types on the pcp lists */
 	MIGRATE_HIGHATOMIC = MIGRATE_PCPTYPES,
 #ifdef CONFIG_CMA
@@ -60,8 +64,6 @@ enum {
 #ifdef CONFIG_MEMORY_ISOLATION
 	MIGRATE_ISOLATE,	/* can't allocate from here */
 #endif
-	MIGRATE_HUGEPAGE,
-	MIGRATE_PAGECACHE,
 	MIGRATE_TYPES
 };
 
@@ -878,6 +880,11 @@ int sysctl_min_unmapped_ratio_sysctl_handler(struct ctl_table *, int,
 int sysctl_min_slab_ratio_sysctl_handler(struct ctl_table *, int,
 			void __user *, size_t *, loff_t *);
 
+int sysctl_migratetype_pagecache_sysctl_handler(struct ctl_table *, int,
+			void __user *, size_t *, loff_t *);
+
+int sysctl_migratetype_hugepage_sysctl_handler(struct ctl_table *, int,
+			void __user *, size_t *, loff_t *);
 extern int numa_zonelist_order_handler(struct ctl_table *, int,
 			void __user *, size_t *, loff_t *);
 extern char numa_zonelist_order[];

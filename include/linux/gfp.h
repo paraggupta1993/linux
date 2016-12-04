@@ -265,6 +265,8 @@ struct vm_area_struct;
 /* Convert GFP flags to their corresponding migrate type */
 #define GFP_MOVABLE_MASK (__GFP_RECLAIMABLE|__GFP_MOVABLE)
 #define GFP_MOVABLE_SHIFT 3
+extern int migratetype_pagecache;
+extern int migratetype_hugepage;
 
 extern gfp_t gfp_allowed_mask;
 static inline int gfpflags_to_migratetype(const gfp_t gfp_flags)
@@ -275,18 +277,20 @@ static inline int gfpflags_to_migratetype(const gfp_t gfp_flags)
 
 	if (unlikely(page_group_by_mobility_disabled))
 		return MIGRATE_UNMOVABLE;
-	
-	if ((gfp_flags & GFP_TRANSHUGE_LIGHT) == GFP_TRANSHUGE_LIGHT)
+
+	if (migratetype_hugepage &&  (gfp_flags & GFP_TRANSHUGE_LIGHT) == GFP_TRANSHUGE_LIGHT)
 		return MIGRATE_HUGEPAGE;
-	
-	if (gfp_allowed_mask != __GFP_BITS_MASK) {
-		printk("GFP_BOOT_MASK is set\n");
-	} 
-	else
-	{
-		if ((gfp_flags & GFP_PAGECACHE) == GFP_PAGECACHE) {
-			printk("GFP_BITS_MASK IS SET AND PAGECACHE IS DEMANDED\n");
-			return MIGRATE_PAGECACHE;
+
+	if (migratetype_pagecache) {	
+		if (gfp_allowed_mask != __GFP_BITS_MASK) {
+			printk("GFP_BOOT_MASK is set\n");
+		} 
+		else
+		{
+			if ((gfp_flags & GFP_PAGECACHE) == GFP_PAGECACHE) {
+				printk("GFP_BITS_MASK IS SET AND PAGECACHE IS DEMANDED\n");
+				return MIGRATE_PAGECACHE;
+			}
 		}
 	}
 
